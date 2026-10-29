@@ -1,0 +1,316 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme {
+  --font-sans: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-mono: "Courier New", Courier, monospace;
+  --font-serif: Georgia, serif;
+}
+
+body, html {
+  @apply bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 h-full;
+}
+
+@media print {
+  @page {
+    margin: 5mm;
+    size: auto;
+  }
+
+  /* Universal Clean Print Settings */
+  *, *::before, *::after {
+    box-shadow: none !important;
+    text-shadow: none !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Ensure text is never faded or light in print - solid black and 100% opacity */
+  body, #root, [id*="print"], table, tr, td, th, p, span, h1, h2, h3, h4, div {
+    color: #000000 !important;
+    -webkit-text-fill-color: #000000 !important;
+    opacity: 1 !important;
+  }
+
+  /* Specific payroll print clarity */
+  #payroll-print-content,
+  #individual-payslip-print,
+  #individual-payslip-thermal-print {
+    color: #000000 !important;
+    background: #ffffff !important;
+  }
+
+  #payroll-print-content th,
+  #payroll-print-content td,
+  #individual-payslip-print th,
+  #individual-payslip-print td {
+    border-color: #000000 !important;
+    color: #000000 !important;
+    -webkit-text-fill-color: #000000 !important;
+    font-weight: 700 !important;
+  }
+
+  #payroll-print-content th {
+    font-weight: 900 !important;
+    background-color: #e5e7eb !important;
+  }
+
+  #individual-payslip-thermal-print * {
+    font-weight: 800 !important;
+    color: #000000 !important;
+    -webkit-text-fill-color: #000000 !important;
+  }
+
+  /* Strictly Hide Chrome, Header/Menu, Sidebar, and Action Buttons */
+  header,
+  aside,
+  nav,
+  button,
+  input,
+  select,
+  .print\:hidden,
+  [class*="print:hidden"],
+  .no-print,
+  #print-page-style {
+    display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    width: 0 !important;
+    overflow: hidden !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Print Displays */
+  .print\:block,
+  [class*="print:block"] {
+    display: block !important;
+  }
+
+  .print\:flex,
+  [class*="print:flex"] {
+    display: flex !important;
+  }
+
+  /* Reset Viewport & Root */
+  html, body {
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    position: static !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    font-size: 11px;
+  }
+  
+  #root, main {
+    display: block !important;
+    height: auto !important;
+    overflow: visible !important;
+    position: static !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    background: transparent !important;
+  }
+
+  /* Remove Dialog Overlays & Blur */
+  .fixed,
+  [class*="fixed"] {
+    position: static !important;
+    inset: auto !important;
+    background: transparent !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  /* Table Formatting */
+  table {
+    page-break-inside: auto;
+    border-collapse: collapse !important;
+    width: 100% !important;
+  }
+  thead {
+    display: table-header-group !important;
+  }
+  tr {
+    page-break-inside: avoid !important;
+    page-break-after: auto !important;
+  }
+  td, th {
+    page-break-inside: avoid !important;
+  }
+}
+
+.card {
+  @apply bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm;
+}
+.stat-value {
+  @apply font-mono text-2xl font-bold text-slate-800 dark:text-white;
+}
+.grid-header {
+  @apply font-serif italic text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400 p-3 border-b border-slate-200 dark:border-slate-800;
+}
+.grid-row {
+  @apply flex items-center p-3 border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer text-sm;
+}
+
+/* Global Dark Mode Refinements for Inputs, Selects, Tables, and Cards */
+.dark {
+  color-scheme: dark;
+}
+
+.dark input:not([type="checkbox"]):not([type="radio"]),
+.dark select,
+.dark textarea {
+  background-color: #0f172a !important;
+  color: #f8fafc !important;
+  border-color: #334155 !important;
+}
+
+.dark input:not([type="checkbox"]):not([type="radio"]):focus,
+.dark select:focus,
+.dark textarea:focus {
+  background-color: #1e293b !important;
+  border-color: #38bdf8 !important;
+  color: #ffffff !important;
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: #64748b !important;
+}
+
+.dark select option {
+  background-color: #0f172a;
+  color: #f8fafc;
+}
+
+.dark .bg-white {
+  background-color: #0f172a;
+}
+
+.dark .bg-slate-50 {
+  background-color: rgba(30, 41, 59, 0.55);
+}
+
+.dark .bg-sky-50,
+.dark .bg-sky-50\/30,
+.dark .bg-sky-50\/40 {
+  background-color: rgba(12, 74, 110, 0.25);
+}
+
+.dark .bg-indigo-50 {
+  background-color: rgba(49, 46, 129, 0.25);
+}
+
+.dark .bg-emerald-50 {
+  background-color: rgba(6, 78, 59, 0.25);
+}
+
+.dark .bg-rose-50 {
+  background-color: rgba(136, 19, 55, 0.25);
+}
+
+.dark .bg-amber-50 {
+  background-color: rgba(120, 53, 15, 0.25);
+}
+
+.dark .text-slate-800,
+.dark .text-slate-900 {
+  color: #f1f5f9;
+}
+
+.dark .text-slate-700 {
+  color: #e2e8f0;
+}
+
+.dark .text-slate-600 {
+  color: #cbd5e1;
+}
+
+.dark #print-invoice-content,
+.dark #print-invoice-content * {
+  background-color: #ffffff !important;
+  color: #000000 !important;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out forwards;
+}
+.animate-fade-in-up {
+  animation: fadeInUp 0.4s ease-out forwards;
+}
+
+/* Logo Animations */
+@keyframes logoTextSlide {
+  0% { transform: translateX(30px); opacity: 0; }
+  100% { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes logoShine {
+  0% { transform: translateX(-150%) skewX(-25deg); }
+  20% { transform: translateX(150%) skewX(-25deg); }
+  100% { transform: translateX(150%) skewX(-25deg); }
+}
+
+@keyframes subtextFade {
+  0% { opacity: 0; letter-spacing: 0.4em; transform: translateX(20px); }
+  100% { opacity: 1; letter-spacing: 0.2em; transform: translateX(0); }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { text-shadow: 0 0 5px rgba(56, 189, 248, 0); }
+  50% { text-shadow: 0 0 15px rgba(56, 189, 248, 0.4); }
+}
+
+.animate-logo-text-slide {
+  animation: logoTextSlide 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-logo-shine {
+  animation: logoShine 4s infinite ease-in-out;
+  animation-delay: 1.5s;
+}
+
+.animate-logo-subtext-fade {
+  animation: subtextFade 1.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation-delay: 0.4s;
+}
+
+.logo-animation-container {
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: pulse-glow 3s ease-in-out infinite;
+}
+
+.logo-animation-container:hover {
+  transform: scale(1.05);
+  filter: brightness(1.2);
+}
+
+.logo-animation-container:hover .animate-logo-subtext-fade {
+  letter-spacing: 0.3em;
+  color: #7dd3fc;
+  transition: all 0.4s ease;
+}
+
+

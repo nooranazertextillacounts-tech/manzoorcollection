@@ -1,0 +1,79 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Reusable helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isTenantOwner(tenantId) {
+      return isSignedIn() && (request.auth.uid == tenantId || request.auth.token.email == tenantId);
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Expense Account Heads
+    match /expenseAccountHeads/{headId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && incoming().tenantId != null && incoming().name is string;
+      allow update, delete: if isSignedIn() && (existing().tenantId == request.auth.uid || existing().tenantId == request.auth.token.email);
+    }
+
+    // Existing collections - providing basic access for now to avoid breaking the app
+    match /users/{userId} {
+      allow read, write: if isSignedIn();
+    }
+    match /branches/{branchId} {
+      allow read, write: if isSignedIn();
+    }
+    match /inventory/{itemId} {
+      allow read, write: if isSignedIn();
+    }
+    match /sales/{saleId} {
+      allow read, write: if isSignedIn();
+    }
+    match /purchases/{purchaseId} {
+      allow read, write: if isSignedIn();
+    }
+    match /customers/{customerId} {
+      allow read, write: if isSignedIn();
+    }
+    match /vendors/{vendorId} {
+      allow read, write: if isSignedIn();
+    }
+    match /employees/{employeeId} {
+      allow read, write: if isSignedIn();
+    }
+    match /ledger/{ledgerId} {
+      allow read, write: if isSignedIn();
+    }
+    match /activity_logs/{logId} {
+      allow read, write: if isSignedIn();
+    }
+    match /ownerTransactions/{txId} {
+      allow read, write: if isSignedIn();
+    }
+    match /employeePurchases/{purchaseId} {
+      allow read, write: if isSignedIn();
+    }
+    match /employeeReturns/{returnId} {
+      allow read, write: if isSignedIn();
+    }
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "name": "Manzoor Collection SaaS",
+  "description": "Multi-branch SaaS for Manzoor Collection bridging sales, inventory, and analytics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

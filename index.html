@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="manifest" href="/manifest.json" />
+    <title>Manzoor Collection SaaS</title>
+    <meta name="description" content="Multi-branch SaaS for Manzoor Collection bridging sales, inventory, and analytics." />
+    <meta property="og:title" content="Manzoor Collection SaaS" />
+    <meta property="og:description" content="Multi-branch SaaS for Manzoor Collection bridging sales, inventory, and analytics." />
+  </head>
+  <body>
+    <script>
+      if ('serviceWorker' in navigator) {
+        if (window.caches) {
+          caches.keys().then((keys) => {
+            keys.forEach((k) => {
+              if (k !== 'manzoor-pos-v4') {
+                caches.delete(k);
+              }
+            });
+          });
+        }
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js')
+            .then(reg => {
+              reg.update();
+            })
+            .catch(err => console.error('Service Worker registration failed:', err));
+        });
+      }
+    </script>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
