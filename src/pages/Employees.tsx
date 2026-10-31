@@ -1,4 +1,4 @@
-import { UsersRound, Plus, Trash2, Edit2, Printer, X, Receipt } from 'lucide-react';
+import { UsersRound, Plus, Trash2, Edit2, Edit3, Sliders, Printer, X, Receipt } from 'lucide-react';
 import { format } from 'date-fns';
 import { useAuth } from '../context/AuthContext';
 import { useBranch } from '../context/BranchContext';
@@ -48,6 +48,14 @@ export function Employees() {
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [currentPrintRecord, setCurrentPrintRecord] = useState<any>(null);
   const [showSlipPreviewModal, setShowSlipPreviewModal] = useState(false);
+
+  // Manual Edit Advance State (کم یا زیادہ ایڈوانس درست کرنے کیلئے)
+  const [showEditAdvanceModal, setShowEditAdvanceModal] = useState(false);
+  const [editAdvanceEmp, setEditAdvanceEmp] = useState<Employee | null>(null);
+  const [manualAdvanceAmount, setManualAdvanceAmount] = useState('');
+  const [manualAdvanceReason, setManualAdvanceReason] = useState('');
+  const [manualAdvanceDate, setManualAdvanceDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [isUpdatingAdvance, setIsUpdatingAdvance] = useState(false);
 
   // Form State
   const [name, setName] = useState('');
@@ -373,6 +381,106 @@ export function Employees() {
       alert("Error adding advance: " + err.message);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const openEditAdvanceModal = (emp: Employee) => {
+    setEditAdvanceEmp(emp);
+    const currentAdv = Number(emp.advanceBalance) || 0;
+    setManualAdvanceAmount(String(currentAdv));
+    setManualAdvanceReason('');
+    setManualAdvanceDate(format(new Date(), 'yyyy-MM-dd'));
+    setShowEditAdvanceModal(true);
+  };
+
+  const handleSaveManualAdvance = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editAdvanceEmp) return;
+    setIsUpdatingAdvance(true);
+    try {
+      const newAdvAmount = Math.max(0, Number(manualAdvanceAmount) || 0);
+      const oldAdvAmount = Number(editAdvanceEmp.advanceBalance) || 0;
+      const diff = newAdvAmount - oldAdvAmount;
+      const dateVal = new Date(manualAdvanceDate).getTime();
+      const reasonText = manualAdvanceReason.trim() ? ` (${manualAdvanceReason.trim()})` : '';
+
+      // 1. Update employee advanceBalance in database
+      await updateDoc(doc(db, 'employees', editAdvanceEmp.id), {
+        advanceBalance: newAdvAmount,
+        updatedAt: Timestamp.now()
+      });
+
+      // Update local state for immediate UI reflection
+      setEmployees(prev => prev.map(emp => emp.id === editAdvanceEmp.id ? { ...emp, advanceBalance: newAdvAmount } : emp));
+
+      if (advanceEmp?.id === editAdvanceEmp.id) {
+        setAdvanceEmp(prev => prev ? { ...prev, advanceBalance: newAdvAmount } : null);
+      }
+
+      // 2. Record ledger adjustment entry if there was an actual change
+      if (diff !== 0) {
+        const isIncrease = diff > 0;
+        const changeAmt = Math.abs(diff);
+        const desc = isIncrease
+          ? `Manual Advance Adjustment (Increase): Rs ${oldAdvAmount.toLocaleString()} ➔ Rs ${newAdvAmount.toLocaleString()} (+Rs ${changeAmt.toLocaleString()})${reasonText}`
+          : `Manual Advance Adjustment (Decrease): Rs ${oldAdvAmount.toLocaleString()} ➔ Rs ${newAdvAmount.toLocaleString()} (-Rs ${changeAmt.toLocaleString()})${reasonText}`;
+
+        const ledgerDoc = await addDoc(collection(db, 'ledger'), {
+          branchId: editAdvanceEmp.branchId,
+          employeeId: editAdvanceEmp.id,
+          date: dateVal,
+          description: desc,
+          category: 'Adjustment',
+          type: isIncrease ? 'OUT' : 'IN',
+          amount: changeAmt,
+          previousAdvance: oldAdvAmount,
+          totalAdvance: newAdvAmount,
+          reference: 'Advance',
+          createdAt: Timestamp.now(),
+          tenantId: user?.tenantId || user?.uid
+        });
+
+        // Add to advanceLedgerRecords locally
+        setAdvanceLedgerRecords(prev => [
+          {
+            id: ledgerDoc.id,
+            branchId: editAdvanceEmp.branchId,
+            employeeId: editAdvanceEmp.id,
+            date: dateVal,
+            description: desc,
+            category: 'Adjustment',
+            type: isIncrease ? 'OUT' : 'IN',
+            amount: changeAmt,
+            previousAdvance: oldAdvAmount,
+            totalAdvance: newAdvAmount,
+            reference: 'Advance'
+          },
+          ...prev
+        ]);
+
+        if (advanceEmp?.id === editAdvanceEmp.id) {
+          setAdvanceHistory(prev => [
+            {
+              id: ledgerDoc.id,
+              date: dateVal,
+              type: isIncrease ? 'issue' : 'return',
+              amount: changeAmt,
+              previousAdvance: oldAdvAmount,
+              totalAdvance: newAdvAmount,
+              desc: desc,
+              refId: ledgerDoc.id
+            },
+            ...prev
+          ]);
+        }
+      }
+
+      setShowEditAdvanceModal(false);
+      setEditAdvanceEmp(null);
+    } catch (err: any) {
+      alert("Error updating advance: " + err.message);
+    } finally {
+      setIsUpdatingAdvance(false);
     }
   };
 
@@ -929,9 +1037,19 @@ export function Employees() {
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-right font-mono">
                       <div className="flex flex-col items-end">
-                        <span className={`text-sm font-bold ${advBal > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-500 dark:text-slate-400'}`}>
-                          {advBal > 0 ? `Rs ${advBal.toLocaleString()}` : 'Rs 0'}
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <span className={`text-sm font-bold ${advBal > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                            {advBal > 0 ? `Rs ${advBal.toLocaleString()}` : 'Rs 0'}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => openEditAdvanceModal(emp)}
+                            className="text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 p-0.5 rounded transition-colors"
+                            title="Edit advance manually / ایڈوانس درست کریں (کم یا زیادہ کریں)"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                         {pInfo.monthReturnsTotal > 0 && (
                           <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 mt-0.5">
                             Return Minus: -Rs {pInfo.monthReturnsTotal.toLocaleString()}
@@ -1015,6 +1133,14 @@ export function Employees() {
                         <button onClick={() => { setAdvanceEmp(emp); setShowAdvanceModal(true); }} className="text-emerald-700 bg-emerald-100 dark:bg-emerald-900/50 hover:bg-emerald-200 px-2 py-1 rounded text-xs font-semibold transition-colors">
                           Add Advance
                         </button>
+                        <button 
+                          onClick={() => openEditAdvanceModal(emp)} 
+                          className="text-amber-800 bg-amber-100 dark:bg-amber-900/50 hover:bg-amber-200 px-2 py-1 rounded text-xs font-semibold transition-colors flex items-center"
+                          title="Edit Advance Balance / ایڈوانس درست کریں (کم یا زیادہ کریں)"
+                        >
+                          <Sliders className="w-3 h-3 mr-1" />
+                          Edit Adv
+                        </button>
                         <button
                           onClick={() => handlePrintEmployeeThermalSlip(emp)}
                           className="text-amber-800 bg-amber-100 dark:bg-amber-900/50 hover:bg-amber-200 px-2 py-1 rounded text-xs font-semibold transition-colors flex items-center"
@@ -1085,7 +1211,18 @@ export function Employees() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm overflow-y-auto print:hidden">
           <div className="bg-white dark:bg-slate-900 rounded-lg shadow-xl w-full max-w-2xl overflow-hidden my-auto">
             <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800/50 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50 sticky top-0 z-10">
-              <h3 className="font-semibold text-slate-800 dark:text-slate-100">Issue Advance to {advanceEmp.name}</h3>
+              <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+                <h3 className="font-semibold text-slate-800 dark:text-slate-100">Issue Advance to {advanceEmp.name}</h3>
+                <button
+                  type="button"
+                  onClick={() => openEditAdvanceModal(advanceEmp)}
+                  className="text-xs bg-amber-100 dark:bg-amber-900/60 hover:bg-amber-200 text-amber-800 dark:text-amber-200 px-2.5 py-1 rounded-md font-semibold flex items-center transition-colors shadow-sm"
+                  title="Manual advance edit / ایڈوانس بیلنس میں ترمیم کریں (کم یا زیادہ کریں)"
+                >
+                  <Sliders className="w-3.5 h-3.5 mr-1" />
+                  Edit Balance (ایڈوانس درست کریں)
+                </button>
+              </div>
               <button 
                 onClick={() => {
                   setShowAdvanceModal(false);
@@ -1110,9 +1247,20 @@ export function Employees() {
                     <div className="space-y-2 mb-4 bg-slate-50 dark:bg-slate-800/60 p-3 rounded-lg border border-slate-200 dark:border-slate-700">
                       <div className="grid grid-cols-3 gap-2 pb-2 border-b border-slate-200 dark:border-slate-700">
                         <div>
-                          <label className="block text-[10px] uppercase tracking-wider font-bold text-slate-500">
-                            Previous Advance
-                          </label>
+                          <div className="flex items-center justify-between">
+                            <label className="block text-[10px] uppercase tracking-wider font-bold text-slate-500">
+                              Previous Advance
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => openEditAdvanceModal(advanceEmp)}
+                              className="text-[10px] font-bold text-amber-600 dark:text-amber-400 hover:underline flex items-center"
+                              title="Edit advance manually / ایڈوانس درست کریں"
+                            >
+                              <Edit3 className="w-2.5 h-2.5 mr-0.5" />
+                              Edit
+                            </button>
+                          </div>
                           <div className="text-sm font-mono font-bold text-slate-800 dark:text-slate-100">
                             Rs {prevAdv.toLocaleString()}
                           </div>
@@ -1278,6 +1426,187 @@ export function Employees() {
           </div>
         </div>
       )}
+
+      {/* Manual Edit Advance Modal (ایڈوانس بیلنس میں ترمیم / درستگی) */}
+      {showEditAdvanceModal && editAdvanceEmp && (() => {
+        const curAdv = Number(editAdvanceEmp.advanceBalance) || 0;
+        const inputAdv = Number(manualAdvanceAmount) || 0;
+        const diff = inputAdv - curAdv;
+        const pInfo = getEmployeePayrollInfo(editAdvanceEmp);
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto print:hidden">
+            <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-lg overflow-hidden my-auto border border-slate-200 dark:border-slate-800">
+              <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent">
+                <div className="flex items-center space-x-2">
+                  <div className="p-2 bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 rounded-lg">
+                    <Sliders className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-slate-900 dark:text-slate-100 text-base">
+                      Edit Advance Balance (ایڈوانس درست کریں)
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      {editAdvanceEmp.name} • {editAdvanceEmp.post || editAdvanceEmp.role} {editAdvanceEmp.phone ? `(${editAdvanceEmp.phone})` : ''}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowEditAdvanceModal(false);
+                    setEditAdvanceEmp(null);
+                  }}
+                  className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveManualAdvance} className="p-6 space-y-4">
+                {/* Current vs Target Advance Card */}
+                <div className="bg-slate-50 dark:bg-slate-800/60 rounded-xl p-4 border border-slate-200 dark:border-slate-700 space-y-3">
+                  <div className="grid grid-cols-2 gap-3 text-center">
+                    <div className="p-2.5 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700">
+                      <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
+                        Existing Advance (موجودہ ایڈوانس)
+                      </span>
+                      <span className="text-lg font-mono font-extrabold text-slate-800 dark:text-slate-100">
+                        Rs {curAdv.toLocaleString()}
+                      </span>
+                    </div>
+
+                    <div className="p-2.5 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700">
+                      <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
+                        New Advance (نیا ایڈوانس)
+                      </span>
+                      <span className={`text-lg font-mono font-extrabold ${diff > 0 ? 'text-amber-600' : diff < 0 ? 'text-emerald-600' : 'text-slate-700 dark:text-slate-300'}`}>
+                        Rs {inputAdv.toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Difference Badge */}
+                  <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-semibold">
+                    <span className="text-slate-500">Adjustment (فرق):</span>
+                    {diff > 0 ? (
+                      <span className="text-amber-600 dark:text-amber-400 font-bold flex items-center">
+                        +Rs {diff.toLocaleString()} (Advance اضافہ ہوگا)
+                      </span>
+                    ) : diff < 0 ? (
+                      <span className="text-emerald-600 dark:text-emerald-400 font-bold flex items-center">
+                        -Rs {Math.abs(diff).toLocaleString()} (Advance کم ہوگا)
+                      </span>
+                    ) : (
+                      <span className="text-slate-500 dark:text-slate-400 font-bold">
+                        کوئی تبدیلی نہیں (No Change)
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center justify-between pt-1">
+                    <span>Earned Salary: <strong className="text-slate-700 dark:text-slate-200">Rs {pInfo.grossEarned.toLocaleString()}</strong></span>
+                    <span>Remaining Pay: <strong className={pInfo.grossEarned - inputAdv < 0 ? 'text-rose-600' : 'text-emerald-600'}>Rs {(pInfo.grossEarned - inputAdv).toLocaleString()}</strong></span>
+                  </div>
+                </div>
+
+                {/* Date */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    Adjustment Date (تاریخ)
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={manualAdvanceDate}
+                    onChange={(e) => setManualAdvanceDate(e.target.value)}
+                    className="w-full rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm focus:border-amber-500 focus:ring-amber-500 text-sm"
+                  />
+                </div>
+
+                {/* New Advance Input */}
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="block text-xs font-bold text-slate-800 dark:text-slate-200">
+                      Manual Advance Amount / نیا کل ایڈوانس (Rs)
+                    </label>
+                    <div className="flex gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setManualAdvanceAmount('0')}
+                        className="text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300 px-2 py-0.5 rounded font-medium transition-colors"
+                      >
+                        Set 0 (ختم کریں)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setManualAdvanceAmount(String(curAdv))}
+                        className="text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300 px-2 py-0.5 rounded font-medium transition-colors"
+                      >
+                        Reset ({curAdv})
+                      </button>
+                    </div>
+                  </div>
+                  <div className="relative rounded-lg shadow-sm">
+                    <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                      <span className="text-slate-500 font-bold sm:text-sm">Rs</span>
+                    </div>
+                    <input
+                      type="number"
+                      required
+                      min="0"
+                      step="1"
+                      value={manualAdvanceAmount}
+                      onChange={(e) => setManualAdvanceAmount(e.target.value)}
+                      className="block w-full rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 pl-10 pr-3 py-2.5 text-base font-mono font-bold text-slate-900 dark:text-slate-100 focus:border-amber-500 focus:ring-amber-500"
+                      placeholder="e.g. 8000"
+                      autoFocus
+                    />
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    مثال: اگر ایڈوانس 9,500 ہے تو اسے یہاں 8,000 یا 10,000 یا جو بھی رقم کرنی ہو درج کریں
+                  </p>
+                </div>
+
+                {/* Reason / Note */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    Adjustment Reason / نوٹ یا وجہ (اختیاری)
+                  </label>
+                  <input
+                    type="text"
+                    value={manualAdvanceReason}
+                    onChange={(e) => setManualAdvanceReason(e.target.value)}
+                    className="w-full rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm focus:border-amber-500 focus:ring-amber-500 text-sm"
+                    placeholder="مثلاً: غلطی کی درستی / Manual Correction / ایڈجسٹمنٹ"
+                  />
+                </div>
+
+                {/* Action Buttons */}
+                <div className="pt-2 flex items-center justify-end space-x-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowEditAdvanceModal(false);
+                      setEditAdvanceEmp(null);
+                    }}
+                    className="px-4 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                  >
+                    Cancel (منسوخ)
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isUpdatingAdvance}
+                    className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-sm font-bold rounded-lg shadow-md hover:shadow-lg disabled:opacity-50 transition-all flex items-center"
+                  >
+                    {isUpdatingAdvance ? 'Updating...' : 'Save Advance (ایڈوانس محفوظ کریں)'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Advance Receipt Thermal Print Preview Modal (80mm Thermal Slip) */}
       {showSlipPreviewModal && currentPrintRecord && (() => {
