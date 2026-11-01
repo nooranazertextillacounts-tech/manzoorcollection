@@ -276,7 +276,7 @@ app.post('/api/db/delete', async (req, res) => {
 
     const dbPool = getPool();
     await ensureTable(dbPool, colName);
-    await dbPool.query(`DELETE FROM "${colName}" WHERE id = $1;`, [id]);
+    await dbPool.query(`DELETE FROM "${colName}" WHERE id = $1 OR data->>'id' = $1;`, [String(id)]);
 
     res.json({ success: true });
   } catch (error: any) {
@@ -553,12 +553,12 @@ app.post('/api/db-batch/transaction', async (req, res) => {
           await client.query(`
             UPDATE "${colName}"
             SET data = COALESCE(data, '{}'::jsonb) || $2::jsonb
-            WHERE id = $1;
-          `, [id, JSON.stringify(data)]);
+            WHERE id = $1 OR data->>'id' = $1;
+          `, [String(id), JSON.stringify(data)]);
         } else if (type === 'delete') {
           await client.query(`
-            DELETE FROM "${colName}" WHERE id = $1;
-          `, [id]);
+            DELETE FROM "${colName}" WHERE id = $1 OR data->>'id' = $1;
+          `, [String(id)]);
         }
       }
       await client.query('COMMIT');
