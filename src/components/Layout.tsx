@@ -321,12 +321,7 @@ export function Layout() {
             >
               <Menu className="w-5 h-5" />
             </button>
-            {location.pathname === '/owner-account' ? (
-              <div className="flex items-center gap-2 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 px-3.5 py-1.5 rounded-lg text-xs font-bold shadow-xs">
-                <Landmark className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
-                <span>Master Owner Account (All Branches - مشترکہ مالک کھاتہ)</span>
-              </div>
-            ) : user?.role === 'super_admin' ? (
+            {user?.role === 'super_admin' ? (
               <div className="flex items-center gap-3 md:gap-6">
                 <div className="hidden sm:flex items-center gap-2 bg-[#d1fae5] text-[#065f46] px-3 py-1 rounded-full text-xs font-semibold">
                   <div className="w-2 h-2 rounded-full" style={{ backgroundColor: activeBranch?.color || '' }}></div>

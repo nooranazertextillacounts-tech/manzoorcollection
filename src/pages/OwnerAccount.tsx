@@ -62,7 +62,10 @@ export function OwnerAccount() {
   const [onlineBillStatusFilter, setOnlineBillStatusFilter] = useState<'all' | 'advance' | 'cleared' | 'pending_cod'>('all');
   const [showOnlineStatementPreview, setShowOnlineStatementPreview] = useState(false);
 
-  // Filters
+  // Branch State: Strictly locked to the currently logged-in / active branch (کوئی سلیکشن نہیں - صرف لاگ ان برانچ)
+  const currentBranchId = activeBranchId || user?.branchId || (branches[0]?.id || 'main');
+  const currentBranch = branches.find(b => b.id === currentBranchId) || branches[0];
+
   const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'yesterday' | 'week' | 'month' | 'custom'>('month');
   const [startDate, setStartDate] = useState(format(startOfMonth(new Date()), 'yyyy-MM-dd'));
   const [endDate, setEndDate] = useState(format(endOfDay(new Date()), 'yyyy-MM-dd'));
@@ -339,6 +342,10 @@ export function OwnerAccount() {
 
   // Filtered List for General / All Transactions
   const filteredList = combinedItems.filter(item => {
+    // Strictly filter by logged-in / active branch only (صرف اس برانچ کا کھاتہ - کمبائن سسٹم ختم)
+    const itemBranch = item.branchId || (branches[0]?.id || 'main');
+    if (itemBranch !== currentBranchId) return false;
+
     // Date filter
     if (!isItemWithinDate(item.date)) return false;
 
@@ -395,6 +402,10 @@ export function OwnerAccount() {
   // Dedicated Filtered List specifically for Online Bills Payments
   const onlineBillsList = React.useMemo(() => {
     return combinedItems.filter(item => {
+      // Strictly filter by logged-in / active branch only (صرف اس برانچ کا کھاتہ - کمبائن سسٹم ختم)
+      const itemBranch = item.branchId || (branches[0]?.id || 'main');
+      if (itemBranch !== currentBranchId) return false;
+
       // Must be an online bill or online sale payment
       const isOnlineSale = item.isOnlineBill || (item.source === 'sale' && item.raw?.saleType === 'Online');
       const isOnlineCat = item.category === 'Online Received' && (item.saleInvoiceNo || item.source === 'sale');
@@ -446,7 +457,7 @@ export function OwnerAccount() {
 
       return true;
     });
-  }, [combinedItems, dateFilter, startDate, endDate, accountFilter, onlineBillStatusFilter, searchQuery]);
+  }, [combinedItems, currentBranchId, branches, dateFilter, startDate, endDate, accountFilter, onlineBillStatusFilter, searchQuery]);
 
   // Dedicated Online Bills Summary Metrics
   const onlineBillsMetrics = React.useMemo(() => {
@@ -608,7 +619,7 @@ export function OwnerAccount() {
     const d = new Date();
     const code = `OWN-CSH-${format(d, 'yyMMdd')}-${Math.floor(100 + Math.random() * 900)}`;
     setVoucherNo(code);
-    setTargetBranchId(activeBranchId || (branches[0]?.id || 'main'));
+    setTargetBranchId(currentBranchId);
     setShowAddModal(true);
   };
 
@@ -631,7 +642,7 @@ export function OwnerAccount() {
     const d = new Date();
     const code = `OWN-ONL-${format(d, 'yyMMdd')}-${Math.floor(100 + Math.random() * 900)}`;
     setVoucherNo(code);
-    setTargetBranchId(activeBranchId || (branches[0]?.id || 'main'));
+    setTargetBranchId(currentBranchId);
     setShowAddModal(true);
   };
 
@@ -664,7 +675,7 @@ export function OwnerAccount() {
     setHandledBy(item.handledBy || user?.name || '');
     setDescription(item.description || '');
     setVoucherNo(item.voucherNo || '');
-    setTargetBranchId(item.branchId || activeBranchId || 'main');
+    setTargetBranchId(item.branchId || currentBranchId);
     setShowAddModal(true);
   };
 
@@ -676,7 +687,7 @@ export function OwnerAccount() {
       return;
     }
 
-    const branchToUse = activeBranchId || targetBranchId || (branches[0]?.id || 'main');
+    const branchToUse = targetBranchId || currentBranchId;
     setIsSubmitting(true);
 
     try {
@@ -828,16 +839,16 @@ export function OwnerAccount() {
                 <Landmark className="w-6 h-6" />
               </div>
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <h1 className="text-xl font-black text-slate-900 dark:text-slate-100 uppercase tracking-tight">
-                    Owner Account & Cash Handover
+                    {currentBranch?.name || 'Branch'} - Owner Account
                   </h1>
-                  <span className="bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
-                    مالک کا کھاتہ
+                  <span className="bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider font-urdu">
+                    {currentBranch?.name} کا کھاتہ
                   </span>
                 </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  Manage Cash-by-Hand handovers, Online Payments (JazzCash, Meezan Bank, EasyPaisa), and Sales settlements.
+                  Manage Cash-by-Hand handovers, Online Payments (JazzCash, Meezan Bank, EasyPaisa), and Sales settlements for {currentBranch?.name}.
                 </p>
               </div>
             </div>
@@ -881,6 +892,30 @@ export function OwnerAccount() {
                 <Plus className="w-4 h-4" />
                 <span>+ Cash Handover (نقد کیش)</span>
               </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Active Logged-In Branch (صرف لاگ ان برانچ - کوئی سلیکشن نہیں) */}
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold">
+              <Building2 className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="text-xs font-black uppercase text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <span>Branch Account:</span>
+                <span className="text-sm font-black text-amber-600 dark:text-amber-400">
+                  {currentBranch?.name || 'Main Branch'}
+                </span>
+                <span className="text-[10px] text-emerald-700 dark:text-emerald-300 font-urdu font-bold bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                  لاگ ان برانچ کھاتہ
+                </span>
+              </div>
+              <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 font-urdu">
+                صرف اس لاگ ان برانچ کا کیش ہینڈ اوور، آن لائن وصولی اور مالک کھاتہ ٹرانزیکشنز دکھائی جا رہی ہیں
+              </div>
             </div>
           </div>
         </div>
@@ -1250,6 +1285,7 @@ export function OwnerAccount() {
                       <tr>
                         <th className="py-3 px-4">Date & Time</th>
                         <th className="py-3 px-3">Bill / Invoice #</th>
+                        <th className="py-3 px-3">Branch (برانچ)</th>
                         <th className="py-3 px-3">Customer Details</th>
                         <th className="py-3 px-3">Online Booking Staff</th>
                         <th className="py-3 px-3">Channel / Bank Head</th>
@@ -1287,6 +1323,13 @@ export function OwnerAccount() {
                                   Online
                                 </span>
                               </div>
+                            </td>
+
+                            <td className="py-3 px-3 whitespace-nowrap">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                                <Building2 className="w-3 h-3 text-amber-600" />
+                                <span>{branches.find(b => b.id === (item.branchId || branches[0]?.id || 'main'))?.name || 'Main Branch'}</span>
+                              </span>
                             </td>
 
                             <td className="py-3 px-3">
@@ -1400,7 +1443,7 @@ export function OwnerAccount() {
                     </tbody>
                     <tfoot className="bg-slate-50 dark:bg-slate-800/80 font-bold border-t-2 border-slate-300 dark:border-slate-700">
                       <tr>
-                        <td colSpan={6} className="py-3 px-4 text-right uppercase text-[11px] text-slate-600 dark:text-slate-300">
+                        <td colSpan={7} className="py-3 px-4 text-right uppercase text-[11px] text-slate-600 dark:text-slate-300">
                           Total Online Bills Received (کل آن لائن وصولی):
                         </td>
                         <td className="py-3 px-3 text-right font-mono text-slate-800 dark:text-slate-200">
@@ -1742,6 +1785,7 @@ export function OwnerAccount() {
                       <tr>
                         <th className="py-3 px-4">Date & Time</th>
                         <th className="py-3 px-3">Voucher / Ref #</th>
+                        <th className="py-3 px-3">Branch (برانچ)</th>
                         <th className="py-3 px-3">Type (قسم)</th>
                         <th className="py-3 px-3">Account Head</th>
                         <th className="py-3 px-4">Description / Details</th>
@@ -1771,6 +1815,13 @@ export function OwnerAccount() {
                             <td className="py-3 px-3 whitespace-nowrap font-mono font-bold">
                               <span className="bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700">
                                 {item.voucherNo}
+                              </span>
+                            </td>
+
+                            <td className="py-3 px-3 whitespace-nowrap">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                                <Building2 className="w-3 h-3 text-amber-600" />
+                                <span>{branches.find(b => b.id === (item.branchId || branches[0]?.id || 'main'))?.name || 'Main Branch'}</span>
                               </span>
                             </td>
 
@@ -2006,6 +2057,20 @@ export function OwnerAccount() {
                     </div>
                   </button>
                 </div>
+              </div>
+
+              {/* Branch Display (صرف لاگ ان برانچ - سلیکشن ختم) */}
+              <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl p-3 flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <Building2 className="w-4 h-4 text-amber-600 shrink-0" />
+                  <div>
+                    <div className="text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 tracking-wider">Branch (برانچ)</div>
+                    <div className="text-xs font-black text-slate-900 dark:text-slate-100">{currentBranch?.name || 'Main Branch'}</div>
+                  </div>
+                </div>
+                <span className="text-[10px] font-urdu font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 px-2.5 py-1 rounded-full border border-amber-200 dark:border-amber-800">
+                  لاگ ان برانچ کھاتہ
+                </span>
               </div>
 
               {/* Account Head Selector (Especially for Online Received) */}
@@ -2267,7 +2332,7 @@ export function OwnerAccount() {
                 />
               </div>
 
-              {/* Voucher Reference (No branch selection required in Owner Master Account) */}
+              {/* Voucher Reference */}
               <div className="pt-1">
                 <label className="block text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-1">
                   Voucher # (Auto)
@@ -2358,21 +2423,23 @@ export function OwnerAccount() {
                   <div className="flex justify-between items-start">
                     <div>
                       <h1 className="text-3xl font-black uppercase tracking-wider text-black font-sans">
-                        {branches.find(b => b.id === (activeBranchId || 'main'))?.name?.toUpperCase() || 'MANZOOR COLLECTION'}
+                        {(currentBranch?.name || 'MANZOOR COLLECTION').toUpperCase()}
                       </h1>
                       <div className="text-xs font-bold text-slate-800 mt-1 space-y-0.5">
-                        {branches.find(b => b.id === (activeBranchId || 'main'))?.address && (
-                          <p>{branches.find(b => b.id === (activeBranchId || 'main'))?.address}</p>
+                        {currentBranch?.address ? (
+                          <p>{currentBranch?.address}</p>
+                        ) : (
+                          <p>Main Commercial Market • Pakistan</p>
                         )}
                         <p className="flex items-center gap-3">
-                          {branches.find(b => b.id === (activeBranchId || 'main'))?.phone && (
-                            <span>Tel: {branches.find(b => b.id === (activeBranchId || 'main'))?.phone}</span>
+                          {currentBranch?.phone && (
+                            <span>Tel: {currentBranch?.phone}</span>
                           )}
-                          {branches.find(b => b.id === (activeBranchId || 'main'))?.phone2 && (
-                            <span>| Mobile: {branches.find(b => b.id === (activeBranchId || 'main'))?.phone2}</span>
+                          {currentBranch?.phone2 && (
+                            <span>| Mobile: {currentBranch?.phone2}</span>
                           )}
-                          {branches.find(b => b.id === (activeBranchId || 'main'))?.onlinePhone && (
-                            <span>| Online: {branches.find(b => b.id === (activeBranchId || 'main'))?.onlinePhone}</span>
+                          {currentBranch?.onlinePhone && (
+                            <span>| Online: {currentBranch?.onlinePhone}</span>
                           )}
                         </p>
                       </div>
@@ -2631,12 +2698,12 @@ export function OwnerAccount() {
                   /* THERMAL 80MM POS RECEIPT LAYOUT */
                   <div className="w-[76mm] max-w-[80mm] mx-auto p-4 text-center space-y-2 text-xs">
                     <h1 className="text-3xl print:text-4xl font-black uppercase tracking-wider">
-                      {branches.find(b => b.id === printTx.branchId)?.name || 'Manzoor Collection'}
+                      {branches.find(b => b.id === (printTx.branchId || currentBranchId))?.name || currentBranch?.name || 'Manzoor Collection'}
                     </h1>
-                    {(branches.find(b => b.id === printTx.branchId)?.phone || branches.find(b => b.id === printTx.branchId)?.address) && (
+                    {(branches.find(b => b.id === (printTx.branchId || currentBranchId))?.phone || branches.find(b => b.id === (printTx.branchId || currentBranchId))?.address) && (
                       <p className="text-[10px] font-bold text-slate-700">
-                        {branches.find(b => b.id === printTx.branchId)?.address && <span>{branches.find(b => b.id === printTx.branchId)?.address}</span>}
-                        {branches.find(b => b.id === printTx.branchId)?.phone && <span> • Tel: {branches.find(b => b.id === printTx.branchId)?.phone}</span>}
+                        {branches.find(b => b.id === (printTx.branchId || currentBranchId))?.address && <span>{branches.find(b => b.id === (printTx.branchId || currentBranchId))?.address}</span>}
+                        {branches.find(b => b.id === (printTx.branchId || currentBranchId))?.phone && <span> • Tel: {branches.find(b => b.id === (printTx.branchId || currentBranchId))?.phone}</span>}
                       </p>
                     )}
 
@@ -2722,10 +2789,10 @@ export function OwnerAccount() {
                     <div className="flex justify-between items-start border-b-2 border-black pb-3">
                       <div>
                         <h2 className="text-3xl font-black uppercase tracking-wider">
-                          {branches.find(b => b.id === printTx.branchId)?.name || 'Manzoor Collection'}
+                          {branches.find(b => b.id === (printTx.branchId || currentBranchId))?.name || currentBranch?.name || 'Manzoor Collection'}
                         </h2>
                         <p className="text-[11px] text-slate-700 font-bold">
-                          {branches.find(b => b.id === printTx.branchId)?.address} • Tel: {branches.find(b => b.id === printTx.branchId)?.phone}
+                          {branches.find(b => b.id === (printTx.branchId || currentBranchId))?.address} • Tel: {branches.find(b => b.id === (printTx.branchId || currentBranchId))?.phone}
                         </p>
                       </div>
                       <div className="text-right">
@@ -2856,13 +2923,24 @@ export function OwnerAccount() {
                   <div className="flex justify-between items-start">
                     <div>
                       <h1 className="text-3xl font-black uppercase tracking-wider text-black font-sans">
-                        MANZOOR COLLECTION
+                        {(currentBranch?.name || 'MANZOOR COLLECTION').toUpperCase()}
                       </h1>
                       <div className="text-xs font-bold text-slate-800 mt-1 space-y-0.5">
-                        <p>Main Commercial Market • Karachi, Pakistan</p>
+                        {currentBranch?.address ? (
+                          <p>{currentBranch?.address}</p>
+                        ) : (
+                          <p>Main Commercial Market • Pakistan</p>
+                        )}
                         <p className="flex items-center gap-3">
-                          <span>Tel: 021-34567890</span>
-                          <span>| Online Customer Support: 0300-1234567</span>
+                          {currentBranch?.phone && (
+                            <span>Tel: {currentBranch?.phone}</span>
+                          )}
+                          {currentBranch?.phone2 && (
+                            <span>| Mobile: {currentBranch?.phone2}</span>
+                          )}
+                          {currentBranch?.onlinePhone && (
+                            <span>| Online: {currentBranch?.onlinePhone}</span>
+                          )}
                         </p>
                       </div>
                     </div>

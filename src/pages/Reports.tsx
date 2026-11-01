@@ -92,31 +92,34 @@ export function Reports() {
 
   const getDocTimestamp = (doc: any): number => {
     if (!doc) return 0;
-    if (typeof doc.date === 'number' && doc.date > 0) return doc.date;
+    if (typeof doc.date === 'number' && !isNaN(doc.date) && doc.date > 0) return doc.date;
     if (typeof doc.date === 'string') {
+      const num = Number(doc.date);
+      if (!isNaN(num) && num > 1000000000) return num;
       const p = new Date(doc.date).getTime();
       if (!isNaN(p) && p > 0) return p;
     }
-    if (doc.date && typeof doc.date === 'object') {
-      if (typeof doc.date.toMillis === 'function') return doc.date.toMillis();
-      if (typeof doc.date.seconds === 'number') return doc.date.seconds * 1000;
-      if (typeof doc.date._seconds === 'number') return doc.date._seconds * 1000;
+    if (doc.date?.toDate && typeof doc.date.toDate === 'function') return doc.date.toDate().getTime();
+    if (doc.date?.toMillis && typeof doc.date.toMillis === 'function') return doc.date.toMillis();
+    if (typeof doc.date?.seconds === 'number') return doc.date.seconds * 1000;
+    if (typeof doc.date?._seconds === 'number') return doc.date._seconds * 1000;
+
+    if (doc.createdAt?.toDate && typeof doc.createdAt.toDate === 'function') return doc.createdAt.toDate().getTime();
+    if (doc.createdAt?.toMillis && typeof doc.createdAt.toMillis === 'function') return doc.createdAt.toMillis();
+    if (typeof doc.createdAt?.seconds === 'number') return doc.createdAt.seconds * 1000;
+    if (typeof doc.createdAt?._seconds === 'number') return doc.createdAt._seconds * 1000;
+    if (typeof doc.createdAt === 'string') {
+      const num = Number(doc.createdAt);
+      if (!isNaN(num) && num > 1000000000) return num;
+      const p = new Date(doc.createdAt).getTime();
+      if (!isNaN(p) && p > 0) return p;
     }
-    if (doc.createdAt) {
-      if (typeof doc.createdAt.toMillis === 'function') return doc.createdAt.toMillis();
-      if (typeof doc.createdAt.seconds === 'number') return doc.createdAt.seconds * 1000;
-      if (typeof doc.createdAt._seconds === 'number') return doc.createdAt._seconds * 1000;
-      if (typeof doc.createdAt === 'number') return doc.createdAt;
-      if (typeof doc.createdAt === 'string') {
-        const p = new Date(doc.createdAt).getTime();
-        if (!isNaN(p) && p > 0) return p;
-      }
-    }
-    if (doc.updatedAt) {
-      if (typeof doc.updatedAt.toMillis === 'function') return doc.updatedAt.toMillis();
-      if (typeof doc.updatedAt.seconds === 'number') return doc.updatedAt.seconds * 1000;
-      if (typeof doc.updatedAt === 'number') return doc.updatedAt;
-    }
+    if (typeof doc.createdAt === 'number' && !isNaN(doc.createdAt) && doc.createdAt > 0) return doc.createdAt;
+
+    if (doc.updatedAt?.toDate && typeof doc.updatedAt.toDate === 'function') return doc.updatedAt.toDate().getTime();
+    if (doc.updatedAt?.toMillis && typeof doc.updatedAt.toMillis === 'function') return doc.updatedAt.toMillis();
+    if (typeof doc.updatedAt?.seconds === 'number') return doc.updatedAt.seconds * 1000;
+    if (typeof doc.updatedAt === 'number') return doc.updatedAt;
     return 0;
   };
 
@@ -256,50 +259,36 @@ export function Reports() {
       const pm = paymentMap.get(paymentMethod) || { revenue: 0, count: 0 };
       paymentMap.set(paymentMethod, { revenue: pm.revenue + revenueOfThisSale, count: pm.count + 1 });
 
-      const isReturn = sale.transactionType === 'Return';
+      const isPureReturn = sale.transactionType === 'Return' || (Number(sale.total) < 0 && (sale.items || []).length === 0);
+      const saleNet = revenueOfThisSale;
       const items = sale.items || [];
       const returnItems = sale.returnItems || [];
-      
-      // Exact integer allocation for revenues to ensure tallying matches sale.total perfectly
-      const itemsSubtotal = items.reduce((acc: number, i: any) => acc + (Number(i.qty || 0) * Number(i.price || 0)), 0);
-      const returnsSubtotal = returnItems.reduce((acc: number, i: any) => acc + (Number(i.qty || 0) * Number(i.price || 0)), 0);
-      const netSubtotal = itemsSubtotal - returnsSubtotal;
-      
-      let remainingTotal = Math.abs(sale.total || 0);
-      let remainingNet = Math.abs(netSubtotal);
 
-      const processItem = (item: any, isReturnItem: boolean) => {
-        let qty = Number(item.qty || 0);
-        let itemBaseValue = Math.abs(qty * Number(item.price || 0));
-        let revenue = 0;
-        
-        if (remainingNet > 0) {
-           revenue = Math.round((itemBaseValue / remainingNet) * remainingTotal);
-           remainingTotal -= revenue;
-           remainingNet -= itemBaseValue;
-        } else if (netSubtotal === 0) {
-           // Fallback if net subtotal is 0 but there's a total (edge case)
-           revenue = Math.round(itemBaseValue);
-        }
+      const recordItem = (item: any, isReturnItem: boolean, allocatedRevenue: number) => {
+        const rawQty = Math.abs(Number(item.qty || 0));
+        const price = Math.abs(Number(item.price || 0));
+        let qty = rawQty;
+        let revenue = allocatedRevenue;
         
         let unitCost = item.cost;
-        if (unitCost === undefined || 0) {
-          const invItem = inventory.find(inv => inv.id === item.id || 0);
+        if (unitCost === undefined || unitCost === 0 || unitCost === null) {
+          const invItem = inventory.find(inv => inv.id === item.id);
           unitCost = Number(invItem?.cost || 0);
         }
-        let cost = Math.round(qty * unitCost);
+        let cost = Math.round(qty * (unitCost || 0));
 
-        const i = itemsMap.get(item.name) || { 
+        const key = item.name || 'Unknown Item';
+        const i = itemsMap.get(key) || { 
           grossRevenue: 0, 
           returnRevenue: 0, 
           netRevenue: 0, 
           grossQty: 0, 
           returnQty: 0, 
           netQty: 0, 
-          price: item.price || 0 
+          price: price || 0 
         };
 
-        if (isReturn || isReturnItem) {
+        if (isReturnItem) {
           i.returnRevenue += Math.abs(revenue);
           i.returnQty += Math.abs(qty);
           i.netRevenue -= Math.abs(revenue);
@@ -314,31 +303,87 @@ export function Reports() {
           i.netRevenue += revenue;
           i.netQty += qty;
         }
-        i.price = item.price || i.price;
-        itemsMap.set(item.name, i);
+        i.price = price || i.price;
+        itemsMap.set(key, i);
 
         let category = 'Uncategorized';
-        const invItem = inventory.find(inv => inv.id === item.id || 0);
+        const invItem = inventory.find(inv => inv.id === item.id);
         if (item.category) {
-             category = item.category;
+          category = item.category;
         } else if (invItem?.category) {
-             category = invItem.category;
+          category = invItem.category;
         }
         
         const cat = categoryMap.get(category) || { revenue: 0, qty: 0 };
         categoryMap.set(category, { revenue: cat.revenue + revenue, qty: cat.qty + qty });
 
-        const p = profitMap.get(item.name) || { revenue: 0, cost: 0, profit: 0, qty: 0 };
-        profitMap.set(item.name, {
+        const p = profitMap.get(key) || { revenue: 0, cost: 0, profit: 0, qty: 0 };
+        profitMap.set(key, {
           revenue: p.revenue + revenue,
-          cost: p.cost + cost,
+          cost: p.cost + (isReturnItem ? -Math.abs(cost) : cost),
           profit: p.profit + (revenue - cost),
           qty: p.qty + qty
         });
       };
 
-      items.forEach(item => processItem(item, false));
-      returnItems.forEach(item => processItem(item, true));
+      if (isPureReturn) {
+        const allRetItems = [...items, ...returnItems];
+        const retSub = allRetItems.reduce((acc: number, i: any) => acc + (Math.abs(Number(i.qty || 0)) * Math.abs(Number(i.price || 0))), 0);
+        const targetRet = Math.abs(saleNet);
+
+        let allocated = 0;
+        allRetItems.forEach((item: any, idx: number) => {
+          const base = Math.abs(Number(item.qty || 0)) * Math.abs(Number(item.price || 0));
+          let rev = 0;
+          if (idx === allRetItems.length - 1) {
+            rev = targetRet - allocated;
+          } else if (retSub > 0) {
+            rev = Math.round((base / retSub) * targetRet);
+            allocated += rev;
+          } else {
+            rev = base;
+            allocated += rev;
+          }
+          recordItem(item, true, rev);
+        });
+
+        if (allRetItems.length === 0) {
+          const dummyItem = { name: sale.description || 'Lump Sum Return', qty: 1, price: targetRet };
+          recordItem(dummyItem, true, targetRet);
+        }
+      } else {
+        const grossSub = items.reduce((acc: number, i: any) => acc + (Math.abs(Number(i.qty || 0)) * Math.abs(Number(i.price || 0))), 0);
+
+        let allocatedReturnSum = 0;
+        returnItems.forEach((item: any) => {
+          const base = Math.abs(Number(item.qty || 0)) * Math.abs(Number(item.price || 0));
+          allocatedReturnSum += base;
+          recordItem(item, true, base);
+        });
+
+        const grossTargetTotal = saleNet + allocatedReturnSum;
+        let allocatedGrossSum = 0;
+
+        items.forEach((item: any, idx: number) => {
+          const base = Math.abs(Number(item.qty || 0)) * Math.abs(Number(item.price || 0));
+          let rev = 0;
+          if (idx === items.length - 1) {
+            rev = grossTargetTotal - allocatedGrossSum;
+          } else if (grossSub > 0) {
+            rev = Math.round((base / grossSub) * grossTargetTotal);
+            allocatedGrossSum += rev;
+          } else {
+            rev = base;
+            allocatedGrossSum += rev;
+          }
+          recordItem(item, false, rev);
+        });
+
+        if (items.length === 0 && returnItems.length === 0) {
+          const dummyItem = { name: sale.description || 'Lump Sum Sale', qty: 1, price: Math.abs(saleNet) };
+          recordItem(dummyItem, false, saleNet);
+        }
+      }
 
       if (!activeBranchId) {
         const bName = branches.find(b => b.id === sale.branchId)?.name || 'Unknown';
