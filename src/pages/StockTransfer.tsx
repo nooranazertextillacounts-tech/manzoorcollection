@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useBranch } from '../context/BranchContext';
 import { db, safeGetDocs, safeCollectionSnapshot } from '../lib/firebase';
 import { collection, query, where, getDocs, doc, Timestamp, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, getDoc, writeBatch, runTransaction } from '../lib/customFirestore';
-import { ArrowRightLeft, PackagePlus, Search, AlertCircle, CheckCircle2, Building, Package, Plus, Minus, X, Inbox, History, Check, Printer, FileSpreadsheet, ChevronDown, ChevronUp, Layers, Filter, BarChart3, Clock, Ban, CheckCircle, User } from 'lucide-react';
+import { ArrowRightLeft, PackagePlus, Search, AlertCircle, CheckCircle2, Building, Package, Plus, Minus, X, Inbox, History, Check, Printer, FileSpreadsheet, ChevronDown, ChevronUp, Layers, Filter, BarChart3, Clock, Ban, CheckCircle, User, Table, LayoutGrid, ArrowDownLeft, ArrowUpRight } from 'lucide-react';
 import { printInvoice } from '../lib/print';
 import { recordActivityLog } from '../lib/activityLogger';
 
@@ -15,7 +15,9 @@ export function StockTransfer() {
   const actualBranches = branches.filter(b => b.id !== 'main');
 
   const [activeTab, setActiveTab] = useState<'send' | 'incoming' | 'history' | 'article_report'>('send');
-  const [historyTab, setHistoryTab] = useState<'sent' | 'received'>('sent');
+  const [historyTab, setHistoryTab] = useState<'all' | 'sent' | 'received'>('all');
+  const [historyViewMode, setHistoryViewMode] = useState<'ledger' | 'cards'>('ledger');
+  const [selectedLedgerBranchId, setSelectedLedgerBranchId] = useState<string>(activeBranchId || 'ALL');
   const [printTransfer, setPrintTransfer] = useState<any | null>(null);
   const [printLedger, setPrintLedger] = useState(false);
   const [lastCompletedTransfer, setLastCompletedTransfer] = useState<any | null>(null);
@@ -25,6 +27,9 @@ export function StockTransfer() {
     if (activeBranchId) {
       setSourceBranchId(activeBranchId);
       setArticleFilterFromBranch(activeBranchId);
+      if (selectedLedgerBranchId === 'ALL') {
+        setSelectedLedgerBranchId(activeBranchId);
+      }
     }
   }, [activeBranchId]);
 

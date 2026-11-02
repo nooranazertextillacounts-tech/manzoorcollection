@@ -40,6 +40,13 @@ export function Ledger() {
   const [viewMode, setViewMode] = useState<'general' | 'customer' | 'vendor' | 'stock_transfer'>((location.state as any)?.viewMode || 'general');
   const [selectedCustomerIdFilter, setSelectedCustomerIdFilter] = useState((location.state as any)?.customerId || '');
   const [selectedVendorIdFilter, setSelectedVendorIdFilter] = useState((location.state as any)?.vendorId || '');
+  const [selectedStockTransferBranchId, setSelectedStockTransferBranchId] = useState<string>(activeBranchId || 'ALL');
+
+  useEffect(() => {
+    if (activeBranchId && selectedStockTransferBranchId === 'ALL') {
+      setSelectedStockTransferBranchId(activeBranchId);
+    }
+  }, [activeBranchId]);
   
   // Date filters
   const [startDate, setStartDate] = useState(format(startOfDay(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)), 'yyyy-MM-dd'));
@@ -59,13 +66,19 @@ export function Ledger() {
   const [transactionDate, setTransactionDate] = useState(new Date().toISOString().slice(0, 10));
 
   useEffect(() => {
-    if (!activeBranchId) return;
+    if (!activeBranchId && viewMode !== 'stock_transfer') return;
 
     let q: any = collection(db, 'ledger');
     let custQ: any = collection(db, 'customers');
     let vendQ: any = collection(db, 'vendors');
     
-    if (activeBranchId) {
+    if (viewMode === 'stock_transfer') {
+      if (selectedStockTransferBranchId && selectedStockTransferBranchId !== 'ALL') {
+        q = query(q, where('branchId', '==', selectedStockTransferBranchId));
+      } else {
+        q = query(q, where('category', '==', 'Stock Transfer'));
+      }
+    } else if (activeBranchId) {
       q = query(q, where('branchId', '==', activeBranchId));
     }
 
@@ -125,7 +138,7 @@ export function Ledger() {
     });
     
     return () => { unsubscribe(); unsubCust(); unsubVend(); };
-  }, [activeBranchId, user, startDate, endDate]);
+  }, [activeBranchId, user, startDate, endDate, viewMode, selectedStockTransferBranchId]);
 
   useEffect(() => {
     const st = location.state as any;
@@ -526,6 +539,9 @@ export function Ledger() {
       if (e.category !== 'Stock Transfer') {
         return false;
       }
+      if (selectedStockTransferBranchId && selectedStockTransferBranchId !== 'ALL') {
+        if (e.branchId !== selectedStockTransferBranchId) return false;
+      }
     }
 
     // Mode filters
@@ -667,7 +683,7 @@ export function Ledger() {
                   : viewMode === 'vendor' 
                     ? (vendors.find(v => v.id === selectedVendorIdFilter)?.name || 'ALL VENDORS LEDGER')
                     : viewMode === 'stock_transfer'
-                      ? 'STOCK TRANSFER LEDGER'
+                      ? (selectedStockTransferBranchId === 'ALL' ? 'ALL BRANCHES - STOCK TRANSFER LEDGER' : `${branches.find(b => b.id === selectedStockTransferBranchId)?.name || 'BRANCH'} - STOCK TRANSFER LEDGER`)
                       : 'GENERAL LEDGER'}
               </span>
             </div>
@@ -878,6 +894,19 @@ export function Ledger() {
                 <option value="">All Vendors</option>
                 {vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
               </select>
+            )}
+            {viewMode === 'stock_transfer' && (
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Branch:</span>
+                <select 
+                  value={selectedStockTransferBranchId} 
+                  onChange={(e) => setSelectedStockTransferBranchId(e.target.value)}
+                  className="rounded-md border border-slate-300 dark:border-slate-600 px-3 py-1.5 text-sm font-semibold bg-white dark:bg-slate-900 print:hidden focus:outline-none focus:ring-1 focus:ring-sky-500"
+                >
+                  <option value="ALL">All Branches (تمام برانچز مشترکہ)</option>
+                  {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                </select>
+              </div>
             )}
             
             <div className="flex rounded-md border border-slate-200 dark:border-slate-700 text-xs overflow-hidden print:hidden">
